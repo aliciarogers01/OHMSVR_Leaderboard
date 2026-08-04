@@ -329,6 +329,60 @@ app.post("/api/play", async (req, res) => {
   }
 });
 
+app.get("/api/test-play", async (req, res) => {
+  try {
+    const player = await getOrCreatePlayer(req.query.playerName || "TestPlayer");
+
+    const media = await getOrCreateMedia({
+      mediaId: req.query.mediaId || "ALBUM-0001",
+      mediaType: req.query.mediaType || "album",
+      artist: req.query.artist || "OHMS Test Artist",
+      title: req.query.title || "Test Album"
+    });
+
+    const eventResult = await pool.query(
+      `
+      INSERT INTO play_events
+        (player_id, media_item_id, media_type, qualified_seconds)
+      VALUES
+        ($1, $2, $3, 120)
+      RETURNING id, created_at;
+      `,
+      [player.id, media.id, media.media_type]
+    );
+
+    await pool.query(
+      `
+      INSERT INTO player_media_counts
+        (player_id, media_item_id, play_count, updated_at)
+      VALUES
+        ($1, $2, 1, NOW())
+      ON CONFLICT (player_id, media_item_id)
+      DO UPDATE SET
+        play_count = player_media_counts.play_count + 1,
+        updated_at = NOW();
+      `,
+      [player.id, media.id]
+    );
+
+    res.json({
+      ok: true,
+      message: "Browser test play saved.",
+      eventId: eventResult.rows[0].id,
+      player: player.player_name,
+      media: media.media_id,
+      mediaType: media.media_type,
+      artist: media.artist,
+      title: media.title
+    });
+  } catch (error) {
+    res.status(500).json({
+      ok: false,
+      error: error.message
+    });
+  }
+});
+
 initDb()
   .then(() => {
     app.listen(PORT, "0.0.0.0", () => {
