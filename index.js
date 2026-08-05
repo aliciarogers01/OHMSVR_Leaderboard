@@ -207,6 +207,60 @@ async function getMediaChart(mediaType) {
   }));
 }
 
+function favoriteLine(label, favorite) {
+  if (!favorite) {
+    return `${label}: none yet`;
+  }
+
+  return `${label}: ${favorite.artist} - ${favorite.title} (${favorite.play_count})`;
+}
+
+function formatPlayerBoard(title, rows) {
+  const lines = [];
+
+  lines.push(title);
+  lines.push("====================");
+
+  if (!rows || rows.length === 0) {
+    lines.push("No qualified plays yet.");
+    return lines.join("\n");
+  }
+
+  for (const row of rows) {
+    lines.push(`${row.rank}. ${row.playerName}`);
+    lines.push(`   Total: ${row.totalPlays}   Albums: ${row.albumPlays}   Carts: ${row.cartPlays}`);
+    lines.push(`   ${favoriteLine("Album", row.mostPlayedAlbum)}`);
+    lines.push(`   ${favoriteLine("Cart", row.mostPlayedCart)}`);
+    lines.push("");
+  }
+
+  return lines.join("\n");
+}
+
+function formatMediaChart(title, rows) {
+  const lines = [];
+
+  lines.push(title);
+  lines.push("====================");
+
+  if (!rows || rows.length === 0) {
+    lines.push("No qualified plays yet.");
+    return lines.join("\n");
+  }
+
+  for (const row of rows) {
+    lines.push(`${row.rank}. ${row.artist} - ${row.title}`);
+    lines.push(`   Plays: ${row.totalPlays}`);
+  }
+
+  return lines.join("\n");
+}
+
+function sendText(res, body) {
+  res.setHeader("Content-Type", "text/plain; charset=utf-8");
+  res.send(body);
+}
+
 app.get("/", (req, res) => {
   res.json({
     ok: true,
@@ -257,6 +311,47 @@ app.get("/api/leaderboard", async (req, res) => {
       ok: false,
       error: error.message
     });
+  }
+});
+
+app.get("/api/boards/monthly.txt", async (req, res) => {
+  try {
+    const rows = await getPlayerBoard({ monthly: true });
+    sendText(res, formatPlayerBoard("OHMS MONTHLY LISTENER LEADERS", rows));
+  } catch (error) {
+    res.status(500);
+    sendText(res, `OHMS MONTHLY LISTENER LEADERS\nERROR: ${error.message}`);
+  }
+});
+
+app.get("/api/boards/alltime.txt", async (req, res) => {
+  try {
+    const rows = await getPlayerBoard({ monthly: false });
+    sendText(res, formatPlayerBoard("OHMS ALL-TIME LISTENER LEADERS", rows));
+  } catch (error) {
+    res.status(500);
+    sendText(res, `OHMS ALL-TIME LISTENER LEADERS\nERROR: ${error.message}`);
+  }
+});
+
+app.get("/api/boards/charts.txt", async (req, res) => {
+  try {
+    const [topAlbums, topCarts] = await Promise.all([
+      getMediaChart("album"),
+      getMediaChart("cart")
+    ]);
+
+    const body = [
+      formatMediaChart("OHMS TOP 20 ALBUMS", topAlbums),
+      "",
+      "",
+      formatMediaChart("OHMS TOP 20 CARTS", topCarts)
+    ].join("\n");
+
+    sendText(res, body);
+  } catch (error) {
+    res.status(500);
+    sendText(res, `OHMS TOP ALBUMS & CARTS\nERROR: ${error.message}`);
   }
 });
 
